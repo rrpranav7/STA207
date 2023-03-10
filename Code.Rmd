@@ -1,0 +1,69 @@
+---
+title: "Code"
+author: "Pranav Ramesh 921571951"
+date: "2023-03-10"
+output: html_document
+---
+
+```{r}
+suppressMessages(library(lmerTest))
+suppressMessages(library(gplots))
+suppressMessages(library(MASS))
+```
+
+```{r}
+session=list()
+for(i in 1:5){
+  session[[i]]=readRDS(paste('session',i,'.rds',sep=''))
+  print(session[[i]]$mouse_name)
+  print(session[[i]]$date_exp)
+  # print(str(session[[i]]))
+}
+```
+
+```{r}
+id=11
+session[[1]]$feedback_type[id]
+session[[1]]$contrast_left[id]
+session[[1]]$contrast_right[id]
+length(session[[1]]$time[[id]])
+dim(session[[1]]$spks[[id]])
+```
+
+```{r}
+ID=4
+t=0.4 # from Background 
+
+n.trials=length(session[[ID]]$spks)
+n.neurons=dim(session[[ID]]$spks[[1]])[1]
+
+# Obtain the firing rate 
+firingrate=numeric(n.trials)
+for(i in 1:n.trials){
+  firingrate[i]=sum(session[[ID]]$spks[[i]])/n.neurons/t
+}
+
+# n.trials
+# n.neurons
+# firingrate
+# session[[ID]]$contrast_left
+# session[[ID]]$contrast_right
+```
+
+```{r}
+plotmeans(firingrate~session[[ID]]$contrast_left, xlab = "Left Contrast", ylab="Mean Firing Rate") 
+plotmeans(firingrate~session[[ID]]$contrast_right, xlab = "Right Contrast", ylab="Mean Firing Rate") 
+interaction.plot(session[[ID]]$contrast_left, session[[ID]]$contrast_right, firingrate, xlab = "Left Contrast", trace.label = "Right Contrast", ylab="Mean Firing Rate", main = "Interaction Plot")
+```
+
+```{r}
+model = aov(firingrate~as.factor(session[[ID]]$contrast_left)*as.factor(session[[ID]]$contrast_right))
+plot(model)
+summary(model)
+```
+
+```{r}
+sig = 0.05
+t=TukeyHSD(model,conf.level = 1-sig)
+plot(t, las=1 , col="green")
+```
