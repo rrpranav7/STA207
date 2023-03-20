@@ -9,6 +9,8 @@ output: html_document
 suppressMessages(library(lmerTest))
 suppressMessages(library(gplots))
 suppressMessages(library(MASS))
+suppressMessages(library(car))
+suppressMessages(library(plotrix))
 ```
 
 ```{r}
@@ -31,39 +33,115 @@ dim(session[[1]]$spks[[id]])
 ```
 
 ```{r}
-ID=4
-t=0.4 # from Background 
+data = data.frame(contrast_left = c(), contrast_right = c(), feedback_type = c(), mouse_name = c(), mean_firing_rate = c(), session = c(), date= c())
 
-n.trials=length(session[[ID]]$spks)
-n.neurons=dim(session[[ID]]$spks[[1]])[1]
+for (j in 1:length(session)){
+  ID=j
+  t=0.4 # from Background
 
-# Obtain the firing rate 
-firingrate=numeric(n.trials)
-for(i in 1:n.trials){
-  firingrate[i]=sum(session[[ID]]$spks[[i]])/n.neurons/t
+  n.trials=length(session[[ID]]$spks)
+  n.neurons=dim(session[[ID]]$spks[[1]])[1]
+
+  # Obtain the firing rate
+  firingrate=numeric(n.trials)
+  for(i in 1:n.trials){
+    firingrate[i]=sum(session[[ID]]$spks[[i]])/n.neurons/t
+  }
+
+  # session1 = rep(ID,length(firingrate))
+  df = data.frame(contrast_left = session[[ID]]$contrast_left,
+                  contrast_right = session[[ID]]$contrast_right,
+                  feedback_type = session[[ID]]$feedback_type,
+                  mouse_name = session[[ID]]$mouse_name,
+                  mean_firing_rate = firingrate,
+                  session = j,
+                  date= session[[ID]]$date_exp)
+  data = rbind(data, df)
 }
+data$session = as.factor(data$session)
 
-# n.trials
-# n.neurons
-# firingrate
-# session[[ID]]$contrast_left
-# session[[ID]]$contrast_right
+head(data)
+```
+
+
+```{r}
+plotmeans(mean_firing_rate~contrast_left,data=data, xlab="Left Contrast", ylab="Mean Firing Rate", main="Main effect Plot")
+plotmeans(mean_firing_rate~contrast_right,data=data, xlab="Right Contrast", ylab="Mean Firing Rate", main="Main effect Plot")
+with(data, interaction.plot(x.factor = contrast_left,
+                            trace.factor = contrast_right,
+                            response = mean_firing_rate,
+                            ylab="Mean Firing Rate",
+                            main="Interaction Plot",
+                            xlab = "Left Contrast"))
 ```
 
 ```{r}
-plotmeans(firingrate~session[[ID]]$contrast_left, xlab = "Left Contrast", ylab="Mean Firing Rate") 
-plotmeans(firingrate~session[[ID]]$contrast_right, xlab = "Right Contrast", ylab="Mean Firing Rate") 
-interaction.plot(session[[ID]]$contrast_left, session[[ID]]$contrast_right, firingrate, xlab = "Left Contrast", trace.label = "Right Contrast", ylab="Mean Firing Rate", main = "Interaction Plot")
+summary(data$mean_firing_rate)
 ```
 
 ```{r}
-model = aov(firingrate~as.factor(session[[ID]]$contrast_left)*as.factor(session[[ID]]$contrast_right))
-plot(model)
+hist(data$mean_firing_rate, main = "Histogram of Mean Firing Rate", xlab = "Mean Firing Rate")
+```
+
+```{r}
+with(data,{
+boxplot(mean_firing_rate~contrast_left,col=rainbow(length((levels(as.factor(contrast_left))))),xlab="Left Contrast", ylab="Mean Firing Rate", main="Outliers in Dataset of the Mean Firing Rate")
+boxplot(mean_firing_rate~contrast_right, col=rainbow(length((levels(as.factor(contrast_right))))), xlab="Right Contrast", ylab="Mean Firing Rate")
+})
+```
+
+```{r}
+with(data, {
+pie3D(table(contrast_left), main="Pie Chart for Left Contrast")
+legend(x = "topright", legend=c("0","0.25","0,5", "1"), fill = rainbow(length((levels(as.factor(contrast_left))))) )
+pie3D(table(contrast_right), main="Pie Chart for Right Contrast")
+legend(x = "topright", legend=c("0","0.25","0,5", "1"), fill = rainbow(length((levels(as.factor(contrast_right))))) )
+})
+```
+
+```{r}
+boxcox(mean_firing_rate ~ contrast_left + contrast_right, data = data)
+```
+
+```{r}
+model = lmer(mean_firing_rate ~ contrast_left * contrast_right + (1 | session) + (1 | mouse_name), data = data)
 summary(model)
+plot(model)
+anova(model)
 ```
 
 ```{r}
-sig = 0.05
-t=TukeyHSD(model,conf.level = 1-sig)
-plot(t, las=1 , col="green")
+qqnorm(resid(model))
+qqline(resid(model))
 ```
+
+```{r}
+plot(cooks.distance(model))
+```
+
+```{r}
+leveneTest(mean_firing_rate ~ as.factor(contrast_left) * as.factor(contrast_right), data=data)
+```
+
+```{r}
+redmodel = aov(mean_firing_rate ~ as.factor(contrast_left) * as.factor(contrast_right), data=data)
+sig = 0.05
+t=TukeyHSD(redmodel,conf.level = 1-sig)
+plot(t, las=1 , col="brown")
+```
+
+```{r}
+logit = glm(feedback_type ~ contrast_left + contrast_right + mean_firing_rate, data = data)
+summary(logit)
+plot(logit)
+```
+
+```{r}
+exp(coef(logit))
+```
+
+```{r}
+1-pchisq(1079.0-1048.9, 1195-1192)
+```
+
+
