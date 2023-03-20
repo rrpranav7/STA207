@@ -1,9 +1,45 @@
 ---
-title: "Code"
-author: "Pranav Ramesh 921571951"
-date: "2023-03-10"
+title: "STA 207 Final Project"
 output: html_document
 ---
+
+## Abstract
+
+Mean firing rate of the brain has been studied by many researchers. This is an intriguing topic and one that is still in development. In this project we will analyze one such study, Distributed coding of choice, action and engagement across the mouse brain. Here we try and analyze if neurons in the visual cortex respond to the stimuli presented on the left and right and predict the outcome of each trial using the neural activities and stimuli.
+
+The project is organized in the following manner: Introduction, Background, Descriptive analysis, Inferential analysis, Sensitivity analysis, Discussion, Issues with the research and References.
+
+The mean firing rate from the mouse seemed to be affected by both the factors, contrast left and contrast right, in an additive way rather than interactively. The normality and equal variance assumption of our model hold and the F-test suggest the model is sufficient and significant.
+
+Overall, the model we achieved follows most of the assumptions with significant statistic which made us accept the proposed model.
+
+## Introduction
+
+The study by Steinmetz et al. (2019) involved experiments conducted on 10 mice across 39 sessions. In each session, the mice were presented with visual stimuli on two screens placed on either side of them.
+
+These stimuli varied in contrast levels are 0, 0.25, 0.5 or 1, and the mice had to use a wheel controlled by their forepaws to make decisions based on the stimuli. The decisions resulted in either a reward or penalty. Meanwhile, the activity of neurons in the visual cortex was recorded as spike trains, which are timestamps indicating neuron firing. Each session comprised several hundred trials. Furthermore, the dataset is of the split-design form.
+
+This project uses two way ANOVA, to see the factors contrast left and contrast right have any influence on the mean firing ratw, additive or interactively.
+
+## Background
+
+Our project will concentrate on analyzing the spike trains of neurons in the visual cortex within the duration from the onset of stimuli to 0.4 seconds post-onset. We will use data solely from five sessions (Sessions 1 to 5) from two mice named Cori and Frossman.
+
+The dataset was initially just with individual session information. The dataset was then combined by going through a loop and adding session information to dataset.
+
+The variables in the dataset for the first grade students are:
+
+1. contrast_left
+2. contrast_right
+3. feedback_type
+4. mouse_name
+5. mean_firing_rate
+6. session
+7. date
+
+## Descriptive analysis
+
+Loading the necessary packages using library function. The suppressMessages() function ignore messages that comes from loading the package to make presentation better, however, this doesn't mean that there is an error in the code.
 
 ```{r}
 suppressMessages(library(lmerTest))
@@ -11,7 +47,13 @@ suppressMessages(library(gplots))
 suppressMessages(library(MASS))
 suppressMessages(library(car))
 suppressMessages(library(plotrix))
+suppressMessages(library(tidyverse))
+suppressMessages(library(caret))
+suppressMessages(library(caTools))
+suppressMessages(library(ROCR))
 ```
+
+Loading the sessions and combing into one dataset. Also the duration is from the onset of stimuli to 0.4 seconds post-onset.
 
 ```{r}
 session=list()
@@ -21,15 +63,6 @@ for(i in 1:5){
   print(session[[i]]$date_exp)
   # print(str(session[[i]]))
 }
-```
-
-```{r}
-id=11
-session[[1]]$feedback_type[id]
-session[[1]]$contrast_left[id]
-session[[1]]$contrast_right[id]
-length(session[[1]]$time[[id]])
-dim(session[[1]]$spks[[id]])
 ```
 
 ```{r}
@@ -63,6 +96,23 @@ data$session = as.factor(data$session)
 head(data)
 ```
 
+The dimension of the dataset is .
+
+```{r}
+dim(data)
+```
+
+The summary statistics of the mean firing rate is
+```{r}
+summary(data$mean_firing_rate)
+```
+
+This datasets have no NA values making the inference result more powerful.
+
+The dataset is unbalanced and has split-design model. Which makes our assumptions and equations for two way ANOVA justified.
+
+Below shows the main effect of each factor and interaction plots on the continuous variable mean_firing_rate.
+
 
 ```{r}
 plotmeans(mean_firing_rate~contrast_left,data=data, xlab="Left Contrast", ylab="Mean Firing Rate", main="Main effect Plot")
@@ -75,20 +125,9 @@ with(data, interaction.plot(x.factor = contrast_left,
                             xlab = "Left Contrast"))
 ```
 
-```{r}
-summary(data$mean_firing_rate)
-```
+From the above interaction plot we see that they have no distinctive pattern, giving us an intuitive feeling that there is no interaction between the factors.
 
-```{r}
-hist(data$mean_firing_rate, main = "Histogram of Mean Firing Rate", xlab = "Mean Firing Rate")
-```
-
-```{r}
-with(data,{
-boxplot(mean_firing_rate~contrast_left,col=rainbow(length((levels(as.factor(contrast_left))))),xlab="Left Contrast", ylab="Mean Firing Rate", main="Outliers in Dataset of the Mean Firing Rate")
-boxplot(mean_firing_rate~contrast_right, col=rainbow(length((levels(as.factor(contrast_right))))), xlab="Right Contrast", ylab="Mean Firing Rate")
-})
-```
+Pie charts being more appealing to show how distributed is the data for a categorical variable.
 
 ```{r}
 with(data, {
@@ -99,29 +138,115 @@ legend(x = "topright", legend=c("0","0.25","0,5", "1"), fill = rainbow(length((l
 })
 ```
 
+## Inferential analysis
+
+We are trying to find out if left contrast and right contrast factors have any impact on the mean firing rate, using two way anova. based on the variability of the session and mouse name. Variability in session is due to the fact that there unseen sessions, and th varibility in mouse name is due to the fact of having 10 mices.
+
+To model it in two way anova we need to represent it of the form.
+
+$$Y_{ijk} = \mu_{..} + \alpha_{i} + \beta_{j} + \eta_{k(i)} + \alpha_{i}*\beta_{j}+ \epsilon_{ijk}$$
+Where,
+
+$Y_{ijk}$ represent the mean firing rate
+
+$\mu_{..}$ represents the population mean
+
+$\alpha_{i}$ represents the main effect due to factor left contrast
+
+$\beta_{j}$ represents the main effect due to factor right contrast
+
+$\eta_{k(i)}$ represents the whole-plot error.
+
+$\epsilon_{ijk}$ represents the presence if random effect/noise on the model. At the end thi becomes the split plot error as well.
+
+Assumptions of the model are:
+
+$\epsilon_{ijk}$ are mutually independent and identically distributed following a Normal distribution with equal mean 0 and variance $\sigma^2$. For a laymen just assume $\sigma^2$ to be a value, like 1, 2, etc.
+
+$\eta_{k(i)}$  are mutually independent and identically distributed following a Normal distribution with equal mean 0 and variance $\sigma_\eta^2$.
+
+$\sum_{i}^{a} \alpha_{i} = 0$ : This means the sum of all main effect of left contrast must be 0.
+
+$\sum_{i}^{b} \beta_{i} = 0$ : This means the sum of all main effect of right contrast must be 0.
+
+$\sum_{i}^{a} \alpha_{i}*\beta_{i} = \sum_{i}^{b} \alpha_{i}*\beta_{i} =0$ : This means the sum of all interaction terms terms between left contrast and right contrast, except the diagonals, must be 0.
+
 ```{r}
 boxcox(mean_firing_rate ~ contrast_left + contrast_right, data = data)
 ```
 
+From above the lambda we get is more than 0.5, hence we don't need to further transform the dataset.
+
+We need to try and find out if the interaction between the factors have any impact on the math scaled score. To do this we assume to take the significance level at 0.05, as most statistics inference of true parameters in research uses 95% Confidence interval as the base. We do this using the below codes.
+
+$H_0: (\alpha\beta)_{ij} = 0$
+
+$H_a$: At least one the $(\alpha\beta)_{ij}$ are not 0
+
 ```{r}
 model = lmer(mean_firing_rate ~ contrast_left * contrast_right + (1 | session) + (1 | mouse_name), data = data)
 summary(model)
-plot(model)
-anova(model)
 ```
 
-```{r}
-qqnorm(resid(model))
-qqline(resid(model))
-```
+Since, the p-values of the F test in the last column, is more than the significance level 0.05, we can accept the null hypothesis, and accept the additive model as our model.
+
+Hence, the reduced model is given below
 
 ```{r}
-plot(cooks.distance(model))
+reducedmodel = lmer(mean_firing_rate ~ contrast_left + contrast_right + (1 | session) + (1 | mouse_name), data = data)
+summary(reducedmodel)
 ```
 
+The estimates of $\mu_{..}$, $\alpha_i$, and $\beta_j$ are as follow
+
 ```{r}
-leveneTest(mean_firing_rate ~ as.factor(contrast_left) * as.factor(contrast_right), data=data)
+summary(reducedmodel)$coefficients
 ```
+
+The log likelihood of the model is given by:
+
+```{r}
+summary(reducedmodel)$logLik
+```
+
+The ANOVA table for the model is given below:
+
+```{r}
+anova(reducedmodel)
+```
+
+The MSE is
+```{r}
+summary(reducedmodel)$sigma^2
+```
+This can be summarized as:
+
+<table style="width:100%">
+  <tr>
+    <th> </th>
+    <th> SS </th>
+    <th> MS </th>
+     <th> d.f. </th>
+  </tr>
+  <tr>
+    <td> Treatment due to Left Contrast </td>
+    <td> 12.97 </td>
+    <td > 12.970 </td>
+    <td> 1 </td>
+  </tr>
+  <tr>
+    <td> Treatment due to Right Contrast </td>
+    <td> 22.717 </td>
+    <td > 22.717 </td>
+    <td> 1 </td>
+  </tr>
+  <tr>
+    <td> Residuals </td>
+    <td> NA </td>
+    <td> 0.4047277 </td>
+    <td> 1189 or NA </td>
+  </tr>
+</table>
 
 ```{r}
 redmodel = aov(mean_firing_rate ~ as.factor(contrast_left) * as.factor(contrast_right), data=data)
@@ -130,18 +255,159 @@ t=TukeyHSD(redmodel,conf.level = 1-sig)
 plot(t, las=1 , col="brown")
 ```
 
+The Tukey-Kramer method Performs multiple pairwise-comparison between the means of groups. Finding the cell with the highest cell mean compared to other cells.
+
+The predictive model of all the dataset except the first 100 trials is given by
+
 ```{r}
-logit = glm(feedback_type ~ contrast_left + contrast_right + mean_firing_rate, data = data)
+train = data[-(1:100),]
+dim(train)
+logit = glm(feedback_type ~ contrast_left + contrast_right + mean_firing_rate, data = train)
 summary(logit)
-plot(logit)
+1-pchisq(1079.0-1048.9, 1195-1192)
 ```
+
+From the above statistic the model is appropriate.
+
+The prediction of the test (the first 100 trials) if given by
+
+```{r}
+test = data[(1:100),]
+dim(test)
+pred_feedback = predict(logit, newdata = test, interval = 'regression')
+pred_feedback
+```
+
+```{r}
+pred_feedback = ifelse(pred_feedback >0.5, 1, -1)
+pred_feedback
+```
+
+the MSPE
+
+```{r}
+mean((predict(logit, newdata = test, interval = 'confidence') - test$feedback_type)^2)
+```
+
+## Sensitivity analysis
+
+```{r}
+hist(data$mean_firing_rate, main = "Histogram of Mean Firing Rate", xlab = "Mean Firing Rate")
+```
+
+From above we can also see the response is roughly normally distributed in the limit.
+
+Boxplots was not used in descriptive analysis, as it serves a purpose for inference.
+
+```{r}
+with(data,{
+boxplot(mean_firing_rate~contrast_left,col=rainbow(length((levels(as.factor(contrast_left))))),xlab="Left Contrast", ylab="Mean Firing Rate", main="Outliers in Dataset of the Mean Firing Rate")
+boxplot(mean_firing_rate~contrast_right, col=rainbow(length((levels(as.factor(contrast_right))))), xlab="Right Contrast", ylab="Mean Firing Rate")
+})
+```
+
+There are some outliers in the dataset response, making them have some influence on the model.
+
+```{r}
+plot(reducedmodel)
+```
+
+The above code is graph between residual and fitted values, which show some outliers in response with respect to the model.
+
+The QQ plot of standardized residual vs theoretical variables is given below.
+
+```{r}
+qqnorm(resid(reducedmodel))
+qqline(resid(reducedmodel))
+```
+
+This shows the model follows the normality assumption very well.
+
+```{r}
+plot(cooks.distance(reducedmodel))
+```
+
+The above code shows the outliers in the predictor variables with respect to the model.
+
+Since, there are outliers in the dataset, model with respect to both factors and response variable, this might have influenced the model to not have interaction terms.
+
+$H_0$ : Equal Variance assumption
+
+$H_a$: At least one the variances are not equal
+
+```{r}
+leveneTest(mean_firing_rate ~ as.factor(contrast_left) * as.factor(contrast_right), data=data)
+```
+
+Since, p-value of the test is more than the significant value 0.05. This means we accept the null hypothesis, that is our assumption of the model having equal variance is appropriate.
+
+The logistic regression is also sufficient and accurate. The model is also subject to outliers, and the mean firing rate may not be an accurate method for predicting feedback type.The logit of the logistic regression model is given by
 
 ```{r}
 exp(coef(logit))
 ```
 
+The confusion matrix and the other information regarding Accuracy, Sensitivity, Specificity are given below.
+
 ```{r}
-1-pchisq(1079.0-1048.9, 1195-1192)
+confusionMatrix(data = as.factor(test$feedback_type), reference=as.factor(pred_feedback), positive = "1")
 ```
 
+The ROC curve and the AUC is given below.
+
+```{r}
+ROCPred = prediction(test$feedback_type, pred_feedback)
+ROCPer = performance(ROCPred, measure = "tpr",
+                             x.measure = "fpr")
+
+auc = performance(ROCPred, measure = "auc")
+auc = auc@y.values[[1]]
+auc
+
+# Plotting curve
+plot(ROCPer)
+plot(ROCPer, colorize = TRUE,
+     print.cutoffs.at = seq(0.1, by = 0.1),
+     main = "ROC CURVE")
+abline(a = 0, b = 1)
+
+auc = round(auc, 4)
+legend(.6, .4, auc, title = "AUC", cex = 1)
+```
+
+The residual vs fitted for logistic regression is given below, and clearly shows the division between the two classes.
+
+```{r}
+plot(logit, which=1)
+```
+
+The below code shows some outliers of the predictor variables in the dataset with respect to the model.
+
+```{r}
+plot(logit, which=4)
+```
+
+## Discussion
+
+The additive model is appropriate, with it following the normality assumption,equal variance F-test showing that the overall model being sufficient. However, the presence of outliers might suggest that the model is being influenced by these points to not get any presence of interactions.
+
+The prediction model is also appropriate making having significant statistic chi-squared value.
+
+## Recommendations
+
+1. Deals with two way ANOVA - A multi-way ANOVA is possible for this model if we use stepwise regression, like the stepAIC() function. To extend and see if other factors contribute to scaled score overall.
+
+2. We could build a Deep learning model - Since, this dataset is very popular, it is appropriate to come up with a deep learning model that can build a multi-way ANOVA and compare it with the setpAIC() funtion to see which yields a better result. This can be achieved by Recurrent Neural Networks or Multi-Layer Perceptron.
+
+# Reference
+
+Original Paper: Steinmetz, N.A., Zatka-Haas, P., Carandini, M. et al. Distributed coding of choice, action and engagement across the mouse brain. Nature 576, 266–273 (2019). https://doi.org/10.1038/s41586-019-1787-x
+
+Code: https://github.com/rrpranav7/STA207
+
+https://stats.stackexchange.com/questions/125856/r-lmer-model-diagnosis-qqnorm
+
+https://www.geeksforgeeks.org/logistic-regression-in-r-programming/
+
+Significance of Logistic Regression https://sphweb.bumc.bu.edu/otlt/MPH-Modules/BS/R/R7_LogisticRegression-Survival/R7_LogisticRegression-Survival3.html
 
